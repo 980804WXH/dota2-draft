@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useEffect } from 'react';
-import { Hero, Team } from '@/lib/types';
+import { Hero, HeroMatchup, Team } from '@/lib/types';
 import { Language, ls } from '@/lib/i18n';
 import { buildPickRecommendations, buildBanRecommendations } from '@/lib/scoreEngine';
 import { useDraftStore } from '@/store/draftStore';
@@ -70,29 +70,55 @@ export default function Recommendations({ lang, activeTeam, currentAction }: Rec
   const enemyPicks = activeTeam === 'radiant' ? direPicks : radiantPicks;
   const allBannedHeroes = useMemo(() => [...radiantBans, ...direBans], [radiantBans, direBans]);
 
-  // Pre-fetch matchup data:
-  //   pick mode → need this hero's matchups vs enemies (fetched per-hero in pool)
-  //   ban mode  → need each of our picks' matchups (to calc threat of available heroes)
-  useEffect(() => {
-    const heroesToFetch = currentAction === 'ban'
-      ? myPicks.map((h) => h.id)       // ban: need our picks' matchups
-      : enemyPicks.map((h) => h.id);   // pick: need enemy picks' matchups
+  // ── 预取对位表 ──
+  // analyzePickHero 读取的是 matchupCache[候选英雄.id]，即「候选 vs 敌方/禁用」；
+  // 接口返回的是「锚点 vs 所有英雄」，所以 pick 阶段要拉敌方已选 + 双方禁用的表，
+  // 再反转为候选视角（见下方 reversedCache）。此前直接预取敌方表且原样传入，
+  // key 对不上，克制分与"禁用克制"加成恒为空。
+  // ban 阶段 analyzeBanHero 读 matchupCache[己方英雄.id]，方向本来就正确，保持不变。
+  const pickAnchorIds = useMemo(
+    () => [...enemyPicks.map((h) => h.id), ...allBannedHeroes.map((h) => h.id)],
+    [enemyPicks, allBannedHeroes]
+  );
+  const banAnchorIds = useMemo(() => myPicks.map((h) => h.id), [myPicks]);
 
+  useEffect(() => {
+    const heroesToFetch = currentAction === 'ban' ? banAnchorIds : pickAnchorIds;
     for (const id of heroesToFetch) {
       if (!matchupCache[id]) {
         fetch(`/api/matchups/${id}`)
-          .then((r) => r.json())
-          .then((data) => setMatchupData(id, data))
-          .catch(() => {});
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+          .then((data) => setMatchupData(id, data as HeroMatchup[]))
+          .catch(() => { /* 单个英雄预取失败不阻塞整体推荐 */ });
       }
     }
-  }, [currentAction, myPicks, enemyPicks, matchupCache, setMatchupData]);
+  }, [currentAction, banAnchorIds, pickAnchorIds, matchupCache, setMatchupData]);
+
+  // 锚点视角 → 候选视角：敌方 A 对候选 X 赢 w 场 ⟹ 候选 X 对 A 赢 (games - w) 场
+  const reversedCache = useMemo(() => {
+    const cache: Record<number, HeroMatchup[]> = {};
+    for (const anchor of [...enemyPicks, ...allBannedHeroes]) {
+      const table = matchupCache[anchor.id];
+      if (!table) continue;
+      for (const m of table) {
+        const list = (cache[m.hero_id] ??= []);
+        list.push({
+          hero_id: anchor.id,
+          games_played: m.games_played,
+          wins: m.games_played - m.wins,
+        });
+      }
+    }
+    return cache;
+  }, [enemyPicks, allBannedHeroes, matchupCache]);
+
+  const matchupLoading = currentAction === 'pick' && pickAnchorIds.some((id) => !matchupCache[id]);
 
   const pickRecs = useMemo(
     () => currentAction === 'pick'
-      ? buildPickRecommendations(availableHeroes, myPicks, enemyPicks, allBannedHeroes, matchupCache)
+      ? buildPickRecommendations(availableHeroes, myPicks, enemyPicks, allBannedHeroes, reversedCache)
       : [],
-    [currentAction, availableHeroes, myPicks, enemyPicks, allBannedHeroes, matchupCache]
+    [currentAction, availableHeroes, myPicks, enemyPicks, allBannedHeroes, reversedCache]
   );
 
   const banRecs = useMemo(
@@ -133,6 +159,11 @@ export default function Recommendations({ lang, activeTeam, currentAction }: Rec
           </span>
         </div>
         <div className="text-[10px] text-gray-600">
+          {matchupLoading && (
+            <span className="mr-1 text-game-gold/70">
+              {ls(lang, '对位数据加载中…', 'Laddar matchdata…', 'Loading matchups…')}
+            </span>
+          )}
           {currentAction === 'pick' && enemyPicks.length > 0
             ? ls(lang, `对 ${enemyPicks.length} 个敌方英雄`, `mot ${enemyPicks.length} fiender`, `vs ${enemyPicks.length} enemy`)
             : currentAction === 'ban' && myPicks.length > 0
