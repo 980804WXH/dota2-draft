@@ -211,3 +211,70 @@ export function calcMatchupWinRate(matchup: HeroMatchup): number {
   if (matchup.games_played === 0) return 0.5;
   return matchup.wins / matchup.games_played;
 }
+
+// ── 己方英雄配合(synergy)数据 ────────────────────────────────
+// 组合样本阈值:低于此场次的同队组合视为噪声,不参与配合评分
+export const MIN_SYNERGY_SAMPLES = 20;
+// 统计窗口:近 365 天,兼顾样本量与时效性(与"最新版本"口径互补)
+const SYNERGY_WINDOW_DAYS = 365;
+
+export interface SynergyRow {
+  anchor: number;   // 己方已选英雄 id
+  partner: number;  // 与之同队的另一英雄 id
+  games: number;
+  wins: number;     // 这两人同队时,"anchor 所在队伍"获胜场次
+}
+
+/**
+ * 查询一组己方英雄与所有其他英雄的"同队组合胜率"。
+ *
+ * 数据来源:OpenDota Explorer SQL。self-join player_matches,用
+ * (a.player_slot < 128) = (b.player_slot < 128) 限定两人在同一队,
+ * a.hero_id <> b.hero_id 排除自身,再 join matches 取胜负与近 365 天窗口。
+ * wins 用 (a.player_slot < 128) = m.radiant_win 判定 anchor 队伍是否获胜。
+ *
+ * 返回 Record<anchorId, HeroMatchup[]>,value 结构复用 HeroMatchup:
+ *   hero_id = partner, games_played = 组合场次, wins = 同队获胜场次。
+ * 一次请求即可覆盖全部己方英雄(最多 5 个),按 anchor 分组。
+ */
+export async function fetchHeroSynergy(anchorIds: number[]): Promise<Record<number, HeroMatchup[]>> {
+  // 白名单校验:只接受 1~200 的整数,杜绝 SQL 注入
+  const ids = anchorIds
+    .filter((id) => Number.isInteger(id) && id > 0 && id < 200)
+    .slice(0, 5);
+  if (ids.length === 0) return {};
+
+  const sql =
+    "SELECT a.hero_id AS anchor, b.hero_id AS partner, count(*) AS games, " +
+    "sum(CASE WHEN (a.player_slot < 128) = m.radiant_win THEN 1 ELSE 0 END) AS wins " +
+    "FROM player_matches a " +
+    "JOIN player_matches b ON a.match_id = b.match_id " +
+    "  AND (a.player_slot < 128) = (b.player_slot < 128) AND a.hero_id <> b.hero_id " +
+    "JOIN matches m ON a.match_id = m.match_id " +
+    `WHERE a.hero_id IN (${ids.join(',')}) ` +
+    `AND m.start_time > extract(epoch from now() - interval '${SYNERGY_WINDOW_DAYS} days')::int ` +
+    `GROUP BY a.hero_id, b.hero_id HAVING count(*) >= ${MIN_SYNERGY_SAMPLES} ` +
+    "ORDER BY games DESC LIMIT 1000";
+
+  try {
+    const url = `${OPENDOTA_BASE}/explorer?sql=${encodeURIComponent(sql)}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return {};
+    const json: { rows?: SynergyRow[]; err?: string } = await res.json();
+    if (json.err || !Array.isArray(json.rows)) return {};
+
+    const map: Record<number, HeroMatchup[]> = {};
+    for (const row of json.rows) {
+      const anchor = Number(row.anchor);
+      const entry: HeroMatchup = {
+        hero_id: Number(row.partner),
+        games_played: Number(row.games),
+        wins: Number(row.wins),
+      };
+      (map[anchor] ??= []).push(entry);
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}

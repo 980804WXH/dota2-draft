@@ -5,8 +5,10 @@ import { Hero, Team } from '@/lib/types';
 import { Language, ls } from '@/lib/i18n';
 import { useDraftStore } from '@/store/draftStore';
 import { getHeroDisplayName } from '@/lib/heroNames';
+import { inferPosition, POS_TAG } from '@/lib/position';
 import HeroCard from './HeroCard';
 import DraftSummary from './DraftSummary';
+import GSIRecommendations from './GSIRecommendations';
 import clsx from 'clsx';
 
 /** GSI 服务器 /state 返回的一条英雄引用（含 id 与 console name 两种兜底） */
@@ -58,26 +60,6 @@ const PHASE_LABEL: Record<string, [string, string, string]> = {
   menu: ['主菜单', 'Huvudmeny', 'Main menu'],
 };
 
-// 依据英雄 roles 粗略推断分路（1-5 号位）；GSI 本身不推送分路数据
-function inferPosition(hero: Hero): number {
-  const r = hero.roles ?? [];
-  const score = [0, 0, 0, 0, 0]; // P1..P5
-  const add = (idx: number, w: number) => { score[idx] += w; };
-  if (r.includes('Carry')) { add(0, 4); add(2, 1); }
-  if (r.includes('Nuker')) { add(1, 2); add(3, 1); }
-  if (r.includes('Initiator')) { add(2, 2); add(3, 1); }
-  if (r.includes('Durable')) { add(2, 3); }
-  if (r.includes('Disabler')) { add(3, 2); add(4, 1); }
-  if (r.includes('Support') || r.includes('Lane Support')) { add(4, 3); add(3, 2); }
-  if (r.includes('Escape')) { add(1, 1); }
-  if (r.includes('Pusher')) { add(0, 1); }
-  let best = 0;
-  for (let i = 1; i < 5; i++) if (score[i] > score[best]) best = i;
-  return best + 1;
-}
-
-const POS_LABEL: Record<number, string> = { 1: '1', 2: '2', 3: '3', 4: '4', 5: '5' };
-
 /** 通过 GSI 实时读取对局阵容并分析（替代手动点选） */
 export default function GSILive({ lang }: { lang: Language }) {
   const { heroes, heroesLoaded } = useDraftStore();
@@ -85,6 +67,14 @@ export default function GSILive({ lang }: { lang: Language }) {
   const [draftUrl, setDraftUrl] = useState(DEFAULT_URL);
   const [state, setState] = useState<GsiState>(EMPTY_STATE);
   const [showResult, setShowResult] = useState(false);
+  // 用户手动指定的分路:heroId -> 1..5(优先级高于按 roles 自动推断)
+  const [positionOverrides, setPositionOverrides] = useState<Record<number, number>>({});
+
+  // 换局(matchId 变化)时清空手动分路与旧的分析结果
+  useEffect(() => {
+    setPositionOverrides({});
+    setShowResult(false);
+  }, [state.matchId]);
 
   // 轮询本地 GSI 服务器
   const poll = useCallback(async () => {
@@ -132,6 +122,17 @@ export default function GSILive({ lang }: { lang: Language }) {
     () => state.dire.picks.map(resolve).filter((h): h is Hero => !!h),
     [state.dire.picks, resolve]
   );
+  const allBannedHeroes = useMemo(
+    () =>
+      [...state.radiant.bans, ...state.dire.bans]
+        .map(resolve)
+        .filter((h): h is Hero => !!h),
+    [state.radiant.bans, state.dire.bans, resolve]
+  );
+  // 推荐服务于本地玩家所在队伍(未识别时默认天辉)
+  const mySide = state.localSide === 'dire' ? 'dire' : 'radiant';
+  const myPicks = mySide === 'dire' ? direPicks : radiantPicks;
+  const enemyPicks = mySide === 'dire' ? radiantPicks : direPicks;
 
   const phaseText = (() => {
     const t = PHASE_LABEL[state.phase];
@@ -182,9 +183,26 @@ export default function GSILive({ lang }: { lang: Language }) {
                       lang={lang}
                       showStats={false}
                     />
-                    <span className="absolute top-0 left-0 bg-black/70 text-game-gold text-[9px] px-1 rounded-br">
-                      {POS_LABEL[inferPosition(h)]}
-                    </span>
+                    {/* 分路角标:点击循环 1→5 手动指定;手动值高亮显示 M 标记 */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPositionOverrides((prev) => ({
+                          ...prev,
+                          [h.id]: ((prev[h.id] ?? inferPosition(h)) % 5) + 1,
+                        }))
+                      }
+                      title={ls(lang, '点击修改分路(1-5 号位循环)', 'Klicka för att ändra bana', 'Click to change lane (cycles 1-5)')}
+                      className={clsx(
+                        'absolute top-0 left-0 text-[9px] px-1 rounded-br font-bold transition-colors',
+                        positionOverrides[h.id]
+                          ? 'bg-game-gold text-black'
+                          : 'bg-black/70 text-game-gold hover:bg-black/90',
+                      )}
+                    >
+                      {POS_TAG[positionOverrides[h.id] ?? inferPosition(h)]}
+                      {positionOverrides[h.id] ? '·M' : ''}
+                    </button>
                   </>
                 ) : (
                   <span className="w-full h-full flex items-center justify-center text-gray-700 text-xl">+</span>
@@ -258,12 +276,24 @@ export default function GSILive({ lang }: { lang: Language }) {
       </div>
 
       {/* 说明 */}
-      <div className="bg-game-panel/80 border border-game-border rounded-lg p-3 text-xs text-gray-400">
-        {ls(
-          lang,
-          '进游戏后自动读取双方阵容，无需手动点选。分路按英雄定位推测（GSI 不推送精确分路）。若一直显示"未连接"，请确认已运行 gsi_server.py 且 cfg 中 uri/token 与服务器一致；部署到 HTTPS 站点时浏览器会拦截对本地 HTTP 的请求，请用本地开发服务器访问。',
-          'Lag läses automatiskt in från matchen. Banor uppskattas från hjälteroller (GSI skickar exakta banor ej).',
-          'Lineups are read automatically from the match. Lanes are inferred from hero roles (GSI does not push exact lanes).'
+      <div className="bg-game-panel/80 border border-game-border rounded-lg p-3 text-xs text-gray-400 flex flex-wrap items-center justify-between gap-2">
+        <span className="flex-1 min-w-[240px]">
+          {ls(
+            lang,
+            '进游戏后自动读取双方阵容。分路默认按英雄定位推测（GSI 不推送精确分路），点击英雄左上角的号位角标可循环切换 1-5 号位手动指定，推荐分组会即时跟随。若"未连接"，请确认已运行 gsi_server.py 且 cfg 中 uri/token 一致；HTTPS 站点会拦截本地 HTTP 请求，请用本地开发服务器访问。',
+            'Lag läses automatiskt. Banor uppskattas från roller; klicka på positionsmärket för att välja 1-5 manuellt.',
+            'Lineups are read automatically. Lanes are inferred from roles; click the position badge on a hero to set lane 1-5 manually.'
+          )}
+        </span>
+        {Object.keys(positionOverrides).length > 0 && (
+          <button
+            type="button"
+            onClick={() => setPositionOverrides({})}
+            className="shrink-0 px-2 py-1 text-[10px] rounded border border-gray-600 text-gray-400 hover:text-game-gold hover:border-game-gold/50 transition-colors"
+          >
+            {ls(lang, '恢复自动分路', 'Återställ banor', 'Reset lanes')}
+            {' '}({Object.keys(positionOverrides).length})
+          </button>
         )}
       </div>
 
@@ -272,6 +302,15 @@ export default function GSILive({ lang }: { lang: Language }) {
         {renderTeam('radiant', state.radiant.picks, state.radiant.bans, radiantPicks)}
         {renderTeam('dire', state.dire.picks, state.dire.bans, direPicks)}
       </div>
+
+      {/* 补位推荐:基于双方已选阵容,按分路分组、按推荐指数排序 */}
+      <GSIRecommendations
+        myPicks={myPicks}
+        enemyPicks={enemyPicks}
+        bannedHeroes={allBannedHeroes}
+        positionOverrides={positionOverrides}
+        lang={lang}
+      />
 
       {/* 分析按钮 */}
       <div className="flex items-center justify-center gap-3">

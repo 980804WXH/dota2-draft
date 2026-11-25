@@ -21,7 +21,14 @@ const MODE_CONFIG: Record<GameMode, { maxBans: number; maxPicks: number }> = {
 
 export default function DraftPage() {
   const [lang, setLang] = useState<Language>('zh');
-  const [view, setView] = useState<AppView>('draft');
+  const [view, setView] = useState<AppView>(() => {
+    // 支持通过 ?view=draft|manual|gsi 直接打开指定视图，便于分享与调试
+    if (typeof window !== 'undefined') {
+      const v = new URLSearchParams(window.location.search).get('view');
+      if (v === 'draft' || v === 'manual' || v === 'gsi') return v;
+    }
+    return 'draft';
+  });
 
   const {
     setHeroes,
@@ -58,7 +65,19 @@ export default function DraftPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header lang={lang} onLangChange={handleLangChange} view={view} onViewChange={setView} />
+      <Header
+        lang={lang}
+        onLangChange={handleLangChange}
+        view={view}
+        onViewChange={(v) => {
+          setView(v);
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('view', v);
+            window.history.replaceState(null, '', url.toString());
+          }
+        }}
+      />
 
       <main className="flex-1 max-w-screen-2xl mx-auto w-full px-3 py-3 flex flex-col gap-3">
         {view === 'manual' ? (

@@ -200,6 +200,67 @@ export function buildBanRecommendations(
     .slice(0, 12);
 }
 
+/**
+ * 选人推荐指数:胜率 35% + 克制 40% + 协同 5% + 职业热度 20%。
+ * buildPickRecommendations 与实时对局补位推荐共用,保证口径一致。
+ */
+export function scorePickHero(hero: Hero, analysis: PickAnalysis): number {
+  return (
+    getEffectiveWinRate(hero) * 0.35 +
+    (analysis.counterDataPoints > 0 ? analysis.counterScore : 0.5) * 0.4 +
+    analysis.synergyBonus * 0.05 +
+    (hero.pro_pick > 0 ? Math.min(hero.pro_pick / 300, 1) : 0) * 0.2
+  );
+}
+
+/** 己方配合评分结果 */
+export interface SynergyScore {
+  /** 候选与己方各英雄同队组合胜率的平均值(0.5 表示无数据/中性) */
+  score: number;
+  /** 参与计算的有效组合数 */
+  dataPoints: number;
+}
+
+/** 综合评分的三个分项,便于 UI 展示"为什么推荐" */
+export interface PickScoreParts {
+  patchWR: number;    // 版本胜率
+  counter: number;    // 克制对方
+  synergy: number;    // 己方配合
+  counterDataPoints: number;
+  synergyDataPoints: number;
+}
+
+/**
+ * 实时对局补位推荐的三因子综合指数。
+ * 用户需求:版本胜率 + 克制对方 + 己方配合。
+ *
+ * 权重:版本胜率 0.40 / 克制 0.35 / 配合 0.25
+ *  - 版本胜率(getEffectiveWinRate)本身已是"该英雄强度"的主信号,权重最高;
+ *  - 克制与配合依赖历史对局样本,缺数据时以 0.5(中性)回退,避免噪声主导;
+ *  - 三者都是 0~1 的胜率类量,可直接加权,量纲一致。
+ */
+export function scorePickHeroFull(
+  hero: Hero,
+  analysis: PickAnalysis,
+  synergy: SynergyScore,
+): { score: number; parts: PickScoreParts } {
+  const patchWR = getEffectiveWinRate(hero);
+  const counter = analysis.counterDataPoints > 0 ? analysis.counterScore : 0.5;
+  const syn = synergy.dataPoints > 0 ? synergy.score : 0.5;
+
+  const score = patchWR * 0.40 + counter * 0.35 + syn * 0.25;
+  return {
+    score,
+    parts: {
+      patchWR,
+      counter,
+      synergy: syn,
+      counterDataPoints: analysis.counterDataPoints,
+      synergyDataPoints: synergy.dataPoints,
+    },
+  };
+}
+
 export function buildPickRecommendations(
   availableHeroes: Hero[],
   myPicks: Hero[],
@@ -210,12 +271,7 @@ export function buildPickRecommendations(
   return availableHeroes
     .map((hero) => {
       const analysis = analyzePickHero(hero, myPicks, enemyPicks, allBannedHeroes, matchupCache);
-      const score =
-        getEffectiveWinRate(hero) * 0.35 +
-        (analysis.counterDataPoints > 0 ? analysis.counterScore : 0.5) * 0.4 +
-        analysis.synergyBonus * 0.05 +
-        (hero.pro_pick > 0 ? Math.min(hero.pro_pick / 300, 1) : 0) * 0.2;
-      return { hero, analysis, score };
+      return { hero, analysis, score: scorePickHero(hero, analysis) };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 12);
