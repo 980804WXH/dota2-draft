@@ -1,7 +1,8 @@
 export type Team = 'radiant' | 'dire';
 export type ActionType = 'ban' | 'pick';
-export type GameMode = 'captains' | 'allpick';
-export type Language = 'en' | 'zh';
+// 仅保留两种路人模式：全英雄选择、随机征召
+export type GameMode = 'allpick' | 'randomdraft';
+export type Language = 'en' | 'zh' | 'sv';
 export type PrimaryAttr = 'agi' | 'str' | 'int' | 'all';
 
 export interface DraftStep {
@@ -22,6 +23,10 @@ export interface Hero {
   pro_ban: number;
   pub_win: number;
   pub_pick: number;
+  // 最新版本（路人）胜率数据，由 OpenDota Explorer 按 patch 统计得到
+  patchPubWin: number;
+  patchPubGames: number;
+  patchVersion: string;
   image_url: string;
   icon_url: string;
 }

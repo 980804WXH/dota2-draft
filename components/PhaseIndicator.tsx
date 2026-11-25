@@ -2,7 +2,6 @@
 
 import { DraftStep, GameMode } from '@/lib/types';
 import { Language, ls } from '@/lib/i18n';
-import { CAPTAINS_MODE_SEQUENCE, ALL_PICK_SEQUENCE } from '@/lib/draftEngine';
 import clsx from 'clsx';
 
 interface PhaseIndicatorProps {
@@ -102,9 +101,9 @@ export default function PhaseIndicator({
           {ls(lang, `步骤 ${currentStep}/${sequence.length}`, `Steg ${currentStep}/${sequence.length}`, `Step ${currentStep}/${sequence.length}`)}
         </span>
         <span className="uppercase tracking-wider">
-          {mode === 'captains'
-            ? ls(lang, '队长模式', 'Kaptenläge', 'Captains Mode')
-            : ls(lang, '全英雄选择', 'Alla hjältar', 'All Pick')}
+          {mode === 'allpick'
+            ? ls(lang, '全英雄选择', 'Alla hjältar', 'All Pick')
+            : ls(lang, '随机征召', 'Slumputkast', 'Random Draft')}
         </span>
       </div>
     </div>

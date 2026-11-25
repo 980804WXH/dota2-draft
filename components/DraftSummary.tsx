@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { Hero } from '@/lib/types';
 import { Language, ls } from '@/lib/i18n';
-import { calcProWinRate, calcPubWinRate } from '@/lib/opendota';
+import { getEffectiveWinRate } from '@/lib/opendota';
 import { getHeroDisplayName } from '@/lib/heroNames';
 import clsx from 'clsx';
 
@@ -103,8 +103,7 @@ function assignPositions(heroes: Hero[]): PositionedHero[] {
 }
 
 function heroWR(hero: Hero): number {
-  const pro = calcProWinRate(hero);
-  return pro > 0 ? pro : calcPubWinRate(hero);
+  return getEffectiveWinRate(hero);
 }
 
 function calcTeamWinRate(picks: Hero[]): number {

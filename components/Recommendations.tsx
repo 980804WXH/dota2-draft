@@ -44,6 +44,8 @@ export default function Recommendations({ lang, activeTeam, currentAction }: Rec
     direPicks,
     radiantBans,
     direBans,
+    mode,
+    randomPool,
     getBannedHeroIds,
     getPickedHeroIds,
     matchupCache,
@@ -54,10 +56,15 @@ export default function Recommendations({ lang, activeTeam, currentAction }: Rec
   const bannedIds = getBannedHeroIds();
   const pickedIds = getPickedHeroIds();
 
-  const availableHeroes = useMemo(
-    () => heroes.filter((h) => !bannedIds.has(h.id) && !pickedIds.has(h.id)),
-    [heroes, bannedIds, pickedIds]
-  );
+  const availableHeroes = useMemo(() => {
+    let list = heroes.filter((h) => !bannedIds.has(h.id) && !pickedIds.has(h.id));
+    // 随机征召：推荐范围限制在共享池内
+    if (mode === 'randomdraft' && randomPool.length > 0) {
+      const poolSet = new Set(randomPool);
+      list = list.filter((h) => poolSet.has(h.id));
+    }
+    return list;
+  }, [heroes, bannedIds, pickedIds, mode, randomPool]);
 
   const myPicks = activeTeam === 'radiant' ? radiantPicks : direPicks;
   const enemyPicks = activeTeam === 'radiant' ? direPicks : radiantPicks;

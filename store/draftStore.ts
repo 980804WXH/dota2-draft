@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { Hero, GameMode, Team, DraftState } from '@/lib/types';
 import { Language } from '@/lib/i18n';
-import { getSequence } from '@/lib/draftEngine';
+import { getSequence, RANDOM_DRAFT_POOL_SIZE } from '@/lib/draftEngine';
 
 export type SortBy = 'alpha' | 'pro_pick' | 'pro_ban' | 'pro_win' | 'pub_win';
 export type SortDir = 'desc' | 'asc';
@@ -13,6 +13,8 @@ interface DraftStore extends DraftState {
   language: Language;
   heroes: Hero[];
   heroesLoaded: boolean;
+  // 随机征召的共享英雄池（英雄 id），其余模式为空
+  randomPool: number[];
   matchupCache: Record<number, { hero_id: number; games_played: number; wins: number }[]>;
   searchQuery: string;
   attrFilter: string;
@@ -23,6 +25,7 @@ interface DraftStore extends DraftState {
   setLanguage: (lang: Language) => void;
   setHeroes: (heroes: Hero[]) => void;
   setMode: (mode: GameMode) => void;
+  rollRandomPool: () => void;
   selectHero: (hero: Hero) => void;
   undoLastAction: () => void;
   resetDraft: () => void;
@@ -51,15 +54,27 @@ function createInitialDraftState(mode: GameMode): Omit<DraftState, 'mode'> {
   };
 }
 
+// 从全部英雄中随机抽取共享池
+function generateRandomPool(heroes: Hero[]): number[] {
+  const ids = heroes.map((h) => h.id);
+  // Fisher-Yates 洗牌
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+  return ids.slice(0, Math.min(RANDOM_DRAFT_POOL_SIZE, ids.length));
+}
+
 export const useDraftStore = create<DraftStore>((set, get) => ({
   // Draft state
-  mode: 'captains',
-  ...createInitialDraftState('captains'),
+  mode: 'allpick',
+  ...createInitialDraftState('allpick'),
 
   // UI state
   language: 'zh',
   heroes: [],
   heroesLoaded: false,
+  randomPool: [],
   matchupCache: {},
   searchQuery: '',
   attrFilter: 'all',
@@ -68,19 +83,39 @@ export const useDraftStore = create<DraftStore>((set, get) => ({
 
   setLanguage: (lang) => set({ language: lang }),
 
-  setHeroes: (heroes) => set({ heroes, heroesLoaded: true }),
+  setHeroes: (heroes) =>
+    set((state) => ({
+      heroes,
+      heroesLoaded: true,
+      // 若当前处于随机征召且尚无池，则初始化一个
+      randomPool:
+        state.mode === 'randomdraft' && state.randomPool.length === 0
+          ? generateRandomPool(heroes)
+          : state.randomPool,
+    })),
 
   setMode: (mode) =>
-    set({
+    set((state) => ({
       mode,
       ...createInitialDraftState(mode),
-    }),
+      // 切到随机征召时生成新池；离开时清空
+      randomPool:
+        mode === 'randomdraft' ? generateRandomPool(state.heroes) : [],
+    })),
+
+  rollRandomPool: () =>
+    set((state) => ({
+      randomPool: generateRandomPool(state.heroes),
+      ...createInitialDraftState('randomdraft'),
+    })),
 
   selectHero: (hero) =>
     set((state) => {
       if (state.isComplete) return state;
       const step = state.sequence[state.currentStep];
       if (!step) return state;
+      // 随机征召模式只能在共享池内选取
+      if (state.mode === 'randomdraft' && !state.randomPool.includes(hero.id)) return state;
 
       const nextStep = state.currentStep + 1;
       const isComplete = nextStep >= state.sequence.length;

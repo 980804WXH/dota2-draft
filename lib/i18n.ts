@@ -12,8 +12,11 @@ const translations = {
     'app.subtitle': 'Pick & Ban Optimizer',
     // Mode
     'mode.label': 'Game Mode',
-    'mode.captains': 'Captains Mode',
     'mode.allpick': 'All Pick',
+    'mode.randomdraft': 'Random Draft',
+    'pool.reroll': 'Reroll pool',
+    'stats.patchWR': 'Patch WR',
+    'stats.patchSamples': 'games',
     // Teams
     'team.radiant': 'Radiant',
     'team.dire': 'Dire',
@@ -61,8 +64,11 @@ const translations = {
     'app.subtitle': '选人/禁人优化工具',
     // Mode
     'mode.label': '游戏模式',
-    'mode.captains': '队长模式',
     'mode.allpick': '全英雄选择',
+    'mode.randomdraft': '随机征召',
+    'pool.reroll': '重随英雄池',
+    'stats.patchWR': '版本胜率',
+    'stats.patchSamples': '场',
     // Teams
     'team.radiant': '天辉',
     'team.dire': '夜魇',
@@ -110,8 +116,11 @@ const translations = {
     'app.subtitle': 'Pick & Ban-optimerare',
     // Mode
     'mode.label': 'Spelläge',
-    'mode.captains': 'Kaptenläge',
     'mode.allpick': 'Alla hjältar',
+    'mode.randomdraft': 'Slumputkast',
+    'pool.reroll': 'Slumpa om pool',
+    'stats.patchWR': 'Patch-VF',
+    'stats.patchSamples': 'matcher',
     // Teams
     'team.radiant': 'Radiant',
     'team.dire': 'Dire',

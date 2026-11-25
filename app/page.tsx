@@ -4,21 +4,24 @@ import { useEffect, useState, useCallback } from 'react';
 import { useDraftStore } from '@/store/draftStore';
 import { Language } from '@/lib/i18n';
 import { GameMode } from '@/lib/types';
-import Header from '@/components/Header';
+import Header, { AppView } from '@/components/Header';
+import ManualAnalysis from '@/components/ManualAnalysis';
+import GSILive from '@/components/GSILive';
 import TeamPanel from '@/components/TeamPanel';
 import PhaseIndicator from '@/components/PhaseIndicator';
 import HeroPool from '@/components/HeroPool';
 import Recommendations from '@/components/Recommendations';
 import DraftSummary from '@/components/DraftSummary';
 
-// Max bans and picks per mode
-const MODE_CONFIG = {
-  captains: { maxBans: 7, maxPicks: 5 },
+// Max bans and picks per mode (Random Draft 无禁用阶段)
+const MODE_CONFIG: Record<GameMode, { maxBans: number; maxPicks: number }> = {
   allpick: { maxBans: 5, maxPicks: 5 },
+  randomdraft: { maxBans: 0, maxPicks: 5 },
 };
 
 export default function DraftPage() {
   const [lang, setLang] = useState<Language>('zh');
+  const [view, setView] = useState<AppView>('draft');
 
   const {
     setHeroes,
@@ -55,9 +58,15 @@ export default function DraftPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header lang={lang} onLangChange={handleLangChange} />
+      <Header lang={lang} onLangChange={handleLangChange} view={view} onViewChange={setView} />
 
       <main className="flex-1 max-w-screen-2xl mx-auto w-full px-3 py-3 flex flex-col gap-3">
+        {view === 'manual' ? (
+          <ManualAnalysis lang={lang} />
+        ) : view === 'gsi' ? (
+          <GSILive lang={lang} />
+        ) : (
+        <>
         {/* Phase indicator */}
         <PhaseIndicator
           currentStep={currentStep}
@@ -120,6 +129,8 @@ export default function DraftPage() {
             lang={lang}
             onReset={resetDraft}
           />
+        )}
+        </>
         )}
       </main>
     </div>

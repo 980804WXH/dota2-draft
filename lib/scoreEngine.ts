@@ -1,5 +1,5 @@
 import { Hero, HeroMatchup } from './types';
-import { calcProWinRate, calcPubWinRate, calcMatchupWinRate } from './opendota';
+import { calcProWinRate, calcPubWinRate, calcMatchupWinRate, getEffectiveWinRate } from './opendota';
 
 export interface PickAnalysis {
   proWinRate: number;
@@ -39,7 +39,8 @@ export function analyzePickHero(
 ): PickAnalysis {
   const proWR = calcProWinRate(hero);
   const pubWR = calcPubWinRate(hero);
-  const baseWR = proWR > 0 ? proWR : pubWR;
+  // 以最新版本路人胜率为主（getEffectiveWinRate 内部优先路人数据）
+  const baseWR = getEffectiveWinRate(hero);
 
   // Counter score: this hero's win rate vs each enemy pick
   const heroMatchups = matchupCache[hero.id] ?? [];
@@ -122,7 +123,7 @@ export function analyzeBanHero(
 ): BanAnalysis {
   const proWR = calcProWinRate(hero);
   const pubWR = calcPubWinRate(hero);
-  const heroStrength = proWR > 0 ? proWR : pubWR;
+  const heroStrength = getEffectiveWinRate(hero);
 
   const totalPB = hero.pro_ban + hero.pro_pick;
   const proBanRate = totalPB > 10 ? hero.pro_ban / totalPB : 0;
@@ -210,7 +211,7 @@ export function buildPickRecommendations(
     .map((hero) => {
       const analysis = analyzePickHero(hero, myPicks, enemyPicks, allBannedHeroes, matchupCache);
       const score =
-        (analysis.proWinRate > 0 ? analysis.proWinRate : analysis.pubWinRate) * 0.35 +
+        getEffectiveWinRate(hero) * 0.35 +
         (analysis.counterDataPoints > 0 ? analysis.counterScore : 0.5) * 0.4 +
         analysis.synergyBonus * 0.05 +
         (hero.pro_pick > 0 ? Math.min(hero.pro_pick / 300, 1) : 0) * 0.2;

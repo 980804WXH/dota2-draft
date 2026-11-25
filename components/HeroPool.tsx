@@ -306,6 +306,10 @@ export default function HeroPool({ lang }: HeroPoolProps) {
   const {
     heroes,
     heroesLoaded,
+    mode,
+    currentStep: stepIndex,
+    randomPool,
+    rollRandomPool,
     searchQuery,
     attrFilter,
     setSearchQuery,
@@ -378,6 +382,11 @@ export default function HeroPool({ lang }: HeroPoolProps) {
 
   const filteredHeroes = useMemo(() => {
     let result = heroes;
+    // 随机征召：仅显示共享池中的英雄
+    if (mode === 'randomdraft' && randomPool.length > 0) {
+      const poolSet = new Set(randomPool);
+      result = result.filter((h) => poolSet.has(h.id));
+    }
     if (attrFilter !== 'all') {
       const attrKey = attrFilter === 'all_attr' ? 'all' : attrFilter;
       result = result.filter((h) => h.primary_attr === attrKey);
@@ -392,7 +401,7 @@ export default function HeroPool({ lang }: HeroPoolProps) {
       );
     }
     return result;
-  }, [heroes, attrFilter, searchQuery]);
+  }, [heroes, mode, randomPool, attrFilter, searchQuery]);
 
   const sortedHeroes = useMemo(() => {
     // dir=1 → high-to-low (desc), dir=-1 → low-to-high (asc)
@@ -436,6 +445,16 @@ export default function HeroPool({ lang }: HeroPoolProps) {
               {tr('pool.title')}
             </h3>
             <div className="flex items-center gap-2">
+              {mode === 'randomdraft' && (
+                <button
+                  onClick={rollRandomPool}
+                  disabled={stepIndex > 0}
+                  title={tr('pool.reroll')}
+                  className="px-2 py-0.5 text-[10px] rounded border border-game-gold/50 text-game-gold hover:bg-game-gold/15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  ⟳ {tr('pool.reroll')}
+                </button>
+              )}
               {currentStep && !isComplete && (
                 <span className={clsx(
                   'text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border',

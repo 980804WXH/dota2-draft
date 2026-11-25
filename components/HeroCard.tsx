@@ -1,7 +1,7 @@
 'use client';
 
 import { Hero } from '@/lib/types';
-import { calcProWinRate, calcPubWinRate } from '@/lib/opendota';
+import { calcProWinRate, calcPubWinRate, isPatchWinRate } from '@/lib/opendota';
 import { Language } from '@/lib/i18n';
 import clsx from 'clsx';
 
@@ -126,6 +126,9 @@ export default function HeroCard({
             Pub WR: <span className={pubWR >= 0.5 ? 'text-green-400' : 'text-red-400'}>
               {(pubWR * 100).toFixed(1)}%
             </span>
+            {isPatchWinRate(hero) && hero.patchVersion && (
+              <span className="ml-1 text-game-gold">[{hero.patchVersion} · {hero.patchPubGames}场]</span>
+            )}
           </div>
         </div>
       )}

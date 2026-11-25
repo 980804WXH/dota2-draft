@@ -1,63 +1,38 @@
 import { DraftStep, GameMode } from './types';
 
-export const CAPTAINS_MODE_SEQUENCE: DraftStep[] = [
-  // Ban Phase 1: 6 bans (3 each, alternating)
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  // Pick Phase 1: 4 picks (2 Radiant, 2 Dire)
-  { team: 'radiant', action: 'pick', phase: 1 },
-  { team: 'radiant', action: 'pick', phase: 1 },
-  { team: 'dire', action: 'pick', phase: 1 },
-  { team: 'dire', action: 'pick', phase: 1 },
-  // Ban Phase 2: 4 bans (2 each)
-  { team: 'dire', action: 'ban', phase: 2 },
-  { team: 'dire', action: 'ban', phase: 2 },
-  { team: 'radiant', action: 'ban', phase: 2 },
-  { team: 'radiant', action: 'ban', phase: 2 },
-  // Pick Phase 2: 4 picks
-  { team: 'radiant', action: 'pick', phase: 2 },
-  { team: 'dire', action: 'pick', phase: 2 },
-  { team: 'dire', action: 'pick', phase: 2 },
-  { team: 'radiant', action: 'pick', phase: 2 },
-  // Ban Phase 3: 2 bans (1 each)
-  { team: 'radiant', action: 'ban', phase: 3 },
-  { team: 'dire', action: 'ban', phase: 3 },
-  // Pick Phase 3: 2 picks
-  { team: 'dire', action: 'pick', phase: 3 },
-  { team: 'radiant', action: 'pick', phase: 3 },
-];
+// 随机征召共享英雄池大小（Dota 2 Random Draft 标准）
+export const RANDOM_DRAFT_POOL_SIZE = 20;
 
-export const ALL_PICK_SEQUENCE: DraftStep[] = [
-  // 10 bans (5 each, alternating)
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  { team: 'radiant', action: 'ban', phase: 1 },
-  { team: 'dire', action: 'ban', phase: 1 },
-  // 10 picks (alternating)
-  { team: 'radiant', action: 'pick', phase: 2 },
-  { team: 'dire', action: 'pick', phase: 2 },
-  { team: 'radiant', action: 'pick', phase: 2 },
-  { team: 'dire', action: 'pick', phase: 2 },
-  { team: 'radiant', action: 'pick', phase: 2 },
-  { team: 'dire', action: 'pick', phase: 2 },
-  { team: 'radiant', action: 'pick', phase: 2 },
-  { team: 'dire', action: 'pick', phase: 2 },
-  { team: 'radiant', action: 'pick', phase: 2 },
-  { team: 'dire', action: 'pick', phase: 2 },
+// 全英雄选择（All Pick）：标准路人规则，双方各 5 禁 5 选。
+// ban 阶段交替进行，pick 阶段交替进行。
+export const ALL_PICK_SEQUENCE: DraftStep[] = (() => {
+  const steps: DraftStep[] = [];
+  for (let i = 0; i < 10; i++) {
+    steps.push({ team: i % 2 === 0 ? 'radiant' : 'dire', action: 'ban', phase: 1 });
+  }
+  for (let i = 0; i < 10; i++) {
+    steps.push({ team: i % 2 === 0 ? 'radiant' : 'dire', action: 'pick', phase: 2 });
+  }
+  return steps;
+})();
+
+// 随机征召（Random Draft）：从共享随机池（20 人）中双方轮流选取，无禁用阶段。
+// Dota 2 标准先手顺序：R, D, R, D, R, D, D, R, D, R（第 7 手交换先手）。
+export const RANDOM_DRAFT_SEQUENCE: DraftStep[] = [
+  { team: 'radiant', action: 'pick', phase: 1 },
+  { team: 'dire', action: 'pick', phase: 1 },
+  { team: 'radiant', action: 'pick', phase: 1 },
+  { team: 'dire', action: 'pick', phase: 1 },
+  { team: 'radiant', action: 'pick', phase: 1 },
+  { team: 'dire', action: 'pick', phase: 1 },
+  { team: 'dire', action: 'pick', phase: 1 },
+  { team: 'radiant', action: 'pick', phase: 1 },
+  { team: 'dire', action: 'pick', phase: 1 },
+  { team: 'radiant', action: 'pick', phase: 1 },
 ];
 
 export function getSequence(mode: GameMode): DraftStep[] {
-  return mode === 'captains' ? CAPTAINS_MODE_SEQUENCE : ALL_PICK_SEQUENCE;
+  return mode === 'allpick' ? ALL_PICK_SEQUENCE : RANDOM_DRAFT_SEQUENCE;
 }
 
 export function getPhaseLabel(step: DraftStep, lang: 'en' | 'zh'): string {

@@ -1,24 +1,28 @@
 'use client';
 
 import { GameMode } from '@/lib/types';
-import { Language, createTranslator } from '@/lib/i18n';
+import { Language, createTranslator, ls } from '@/lib/i18n';
 import { useDraftStore } from '@/store/draftStore';
 import clsx from 'clsx';
+
+export type AppView = 'draft' | 'manual' | 'gsi';
 
 interface HeaderProps {
   lang: Language;
   onLangChange: (lang: Language) => void;
+  view: AppView;
+  onViewChange: (view: AppView) => void;
 }
 
 const LANG_FLAGS: Record<Language, string> = { zh: '🇨🇳', en: '🇬🇧', sv: '🇸🇪' };
 const LANG_LABELS: Record<Language, string> = { zh: '中', en: 'EN', sv: 'SE' };
 
-export default function Header({ lang, onLangChange }: HeaderProps) {
-  const { mode, setMode, resetDraft } = useDraftStore();
+export default function Header({ lang, onLangChange, view, onViewChange }: HeaderProps) {
+  const { mode, setMode } = useDraftStore();
   const tr = createTranslator(lang);
 
   const handleModeChange = (newMode: GameMode) => {
-    setMode(newMode);
+    if (newMode !== mode) setMode(newMode);
   };
 
   return (
@@ -41,7 +45,7 @@ export default function Header({ lang, onLangChange }: HeaderProps) {
 
         {/* Mode switcher */}
         <div className="flex items-center bg-gray-900 rounded border border-gray-700 p-0.5 gap-0.5">
-          {(['captains', 'allpick'] as GameMode[]).map((m) => (
+          {(['allpick', 'randomdraft'] as GameMode[]).map((m) => (
             <button
               key={m}
               onClick={() => handleModeChange(m)}
@@ -52,7 +56,29 @@ export default function Header({ lang, onLangChange }: HeaderProps) {
                   : 'text-gray-400 hover:text-gray-200',
               )}
             >
-              {m === 'captains' ? tr('mode.captains') : tr('mode.allpick')}
+              {m === 'allpick' ? tr('mode.allpick') : tr('mode.randomdraft')}
+            </button>
+          ))}
+        </div>
+
+        {/* View switcher */}
+        <div className="flex items-center bg-gray-900 rounded border border-gray-700 p-0.5 gap-0.5">
+          {(['draft', 'manual', 'gsi'] as AppView[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => onViewChange(v)}
+              className={clsx(
+                'px-3 py-1 rounded text-xs font-medium transition-all',
+                view === v
+                  ? 'bg-game-gold text-black font-bold'
+                  : 'text-gray-400 hover:text-gray-200',
+              )}
+            >
+              {v === 'draft'
+                ? ls(lang, '选人模拟', 'Utkast', 'Draft')
+                : v === 'manual'
+                ? ls(lang, '阵容分析', 'Laganalys', 'Analysis')
+                : ls(lang, '实时对局', 'Live-match', 'Live Game')}
             </button>
           ))}
         </div>
